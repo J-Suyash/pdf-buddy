@@ -1,4 +1,4 @@
 from app.schemas.job import JobResponse, JobUploadResponse
-from app.schemas.question import QuestionResponse, SearchQuery
+from app.schemas.question import QuestionResponse, SearchQuery, ExamPaperMetadata
 
-__all__ = ["JobResponse", "JobUploadResponse", "QuestionResponse", "SearchQuery"]
+__all__ = ["JobResponse", "JobUploadResponse", "QuestionResponse", "SearchQuery", "ExamPaperMetadata"]

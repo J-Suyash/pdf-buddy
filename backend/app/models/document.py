@@ -17,6 +17,15 @@ class Document(Base):
     processed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+    # Exam metadata
+    course_code = Column(String(50), nullable=True)  # e.g., "21CSE321J"
+    course_name = Column(String(255), nullable=True)  # e.g., "SDWAN NETWORKING SOLUTIONS"
+    semester = Column(String(50), nullable=True)  # e.g., "Fifth Semester"
+    exam_date = Column(String(100), nullable=True)  # e.g., "NOVEMBER 2024"
+    total_marks = Column(Integer, nullable=True)  # e.g., 75
+    duration_minutes = Column(Integer, nullable=True)  # e.g., 180
+    exam_type = Column(String(50), nullable=True)  # e.g., "End Semester", "Mid Term"
+
     # Relationships
     job = relationship("Job", back_populates="documents")
     questions = relationship("Question", back_populates="document", cascade="all, delete-orphan")

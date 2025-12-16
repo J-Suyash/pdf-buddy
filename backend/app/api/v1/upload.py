@@ -4,11 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import uuid
 import os
+import logging
 
 from app.core.database import get_db
 from app.models import Job, Document, JobStatus
 from app.schemas import JobUploadResponse
 from app.utils.exceptions import ValidationException
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["upload"])
 
@@ -67,6 +70,12 @@ async def upload_files(
         )
         db.add(job)
         await db.commit()
+
+        # Trigger Celery task for background processing
+        from app.tasks.pdf_processor import process_pdf_task
+        process_pdf_task.delay(job_id, file_paths)
+        
+        logger.info(f"Job {job_id} created and queued for processing")
 
         return JobUploadResponse(
             job_id=job_id,

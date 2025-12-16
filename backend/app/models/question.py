@@ -14,6 +14,17 @@ class Question(Base):
     content = Column(Text, nullable=False)
     qdrant_id = Column(Integer, nullable=True)  # Qdrant point ID
 
+    # Part information
+    part = Column(String(10), nullable=True)  # "A", "B", "C"
+    part_marks = Column(Integer, nullable=True)  # marks for this part
+    question_number = Column(String(20), nullable=True)  # "21", "21.a", "1"
+    unit = Column(Integer, nullable=True)  # 1-5, based on question numbering
+
+    # MCQ specific
+    is_mcq = Column(Integer, default=0)  # SQLite doesn't have Boolean, using Integer
+    options = Column(JSON, nullable=True)  # {"A": "...", "B": "...", ...}
+    correct_answer = Column(String(10), nullable=True)  # if available
+
     # Metadata
     subject = Column(String(100), nullable=True)
     topic = Column(String(100), nullable=True)
@@ -22,6 +33,10 @@ class Question(Base):
     year = Column(Integer, nullable=True)
     marks = Column(Integer, nullable=True)
     page_number = Column(Integer, nullable=True)
+
+    # Additional flags
+    is_mandatory = Column(Integer, default=1)  # vs "Answer ANY ONE"
+    has_or_option = Column(Integer, default=0)  # has (OR) alternative
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
