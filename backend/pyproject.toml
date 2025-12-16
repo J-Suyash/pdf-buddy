@@ -11,6 +11,7 @@ dependencies = [
     "celery>=5.6.0",
     "fastapi>=0.124.4",
     "llama-cloud>=0.1.45",
+    "llama-cloud-services>=0.6.88",
     "llama-parse>=0.6.88",
     "pydantic-settings>=2.12.0",
     "python-multipart>=0.0.20",

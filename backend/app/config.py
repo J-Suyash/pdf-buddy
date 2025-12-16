@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     celery_broker_url: str
     qdrant_host: str
     qdrant_port: int
-    llama_api_key: str
+    llama_api_key: str = ""  # For backward compatibility with LlamaParse
+    llama_cloud_api_key: str = ""  # For LlamaExtract
     secret_key: str
 
     class Config:

@@ -88,26 +88,36 @@ async def _process_pdf_async(job_id: str, file_paths: list):
                     session.add(document)
                     await session.flush()  # Get document ID
 
-                    # Extract text from PDF using LlamaCloud
+                    # Extract text from PDF using LlamaExtract
                     logger.info(f"Extracting text from {filename}...")
                     extraction_result = await llama_service.extract_from_pdf(file_path)
                     
                     extracted_text = extraction_result.get("text", "")
                     pages = extraction_result.get("pages", [])
+                    structured_data = extraction_result.get("structured_data", {})
                     
-                    # Extract exam metadata
+                    # Extract exam metadata from structured data
                     logger.info(f"Extracting exam metadata from {filename}...")
-                    exam_metadata = await llama_service.extract_exam_metadata(extracted_text)
+                    header = structured_data.get("header", {}) if isinstance(structured_data, dict) else {}
                     
                     # Update document with metadata and page count
                     document.page_count = len(pages)
-                    document.course_code = exam_metadata.course_code
-                    document.course_name = exam_metadata.course_name
-                    document.semester = exam_metadata.semester
-                    document.exam_date = exam_metadata.exam_date
-                    document.total_marks = exam_metadata.total_marks
-                    document.duration_minutes = exam_metadata.duration_minutes
-                    document.exam_type = exam_metadata.exam_type
+                    document.course_code = header.get("course_code")
+                    document.course_name = header.get("course_name")
+                    document.semester = header.get("semester")
+                    document.exam_date = header.get("exam_date_month")
+                    
+                    # Parse duration (e.g., "3 hours" -> 180 minutes)
+                    duration_str = header.get("duration", "")
+                    if "hour" in duration_str.lower():
+                        try:
+                            hours = int(''.join(filter(str.isdigit, duration_str)))
+                            document.duration_minutes = hours * 60
+                        except:
+                            document.duration_minutes = None
+                    
+                    document.total_marks = header.get("max_marks")
+                    document.exam_type = "End Semester"  # Default, can be inferred
                     total_pages += len(pages)
 
                     # Update progress
@@ -120,9 +130,12 @@ async def _process_pdf_async(job_id: str, file_paths: list):
                     )
                     await session.commit()
 
-                    # Parse questions from extracted text by parts
+                    # Parse questions from structured data
                     logger.info(f"Parsing questions from {filename}...")
-                    questions_by_parts = await llama_service.extract_questions_by_parts(extracted_text)
+                    questions_by_parts = await llama_service.extract_questions_by_parts(
+                        extracted_text, 
+                        structured_data=structured_data
+                    )
                     
                     # Flatten all questions from all parts
                     questions_data = []
@@ -140,6 +153,7 @@ async def _process_pdf_async(job_id: str, file_paths: list):
                             part=q_data.get("part"),
                             part_marks=q_data.get("part_marks"),
                             question_number=q_data.get("question_number"),
+                            unit=q_data.get("unit"),
                             # MCQ fields
                             is_mcq=1 if q_data.get("is_mcq") else 0,
                             options=q_data.get("options"),

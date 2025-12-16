@@ -1,0 +1,246 @@
+{
+    "additionalProperties": false,
+    "properties": {
+        "header": {
+            "additionalProperties": false,
+            "description": "General information about the examination.",
+            "properties": {
+                "course_code": {
+                    "description": "The unique code for the course (e.g., '21CSE321J').",
+                    "type": "string"
+                },
+                "course_name": {
+                    "description": "The full name of the course (e.g., 'SDWAN NETWORKING SOLUTIONS').",
+                    "type": "string"
+                },
+                "semester": {
+                    "description": "The academic semester for which the exam is conducted (e.g., 'Fifth Semester').",
+                    "type": "string"
+                },
+                "exam_date_month": {
+                    "description": "The month and year of the examination (e.g., 'NOVEMBER 2024').",
+                    "type": "string"
+                },
+                "max_marks": {
+                    "description": "The maximum marks for the examination.",
+                    "type": "number"
+                },
+                "duration": {
+                    "description": "The total duration of the examination (e.g., '3 hours').",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "course_code",
+                "course_name",
+                "semester",
+                "exam_date_month",
+                "max_marks",
+                "duration"
+            ],
+            "type": "object"
+        },
+        "part_a": {
+            "additionalProperties": false,
+            "description": "Multiple Choice Questions (MCQs) section.",
+            "properties": {
+                "instructions": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "General instructions for Part A (e.g., 'Answer ALL Questions')."
+                },
+                "questions": {
+                    "description": "A list of multiple choice questions.",
+                    "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "question_number": {
+                                "description": "The sequential number of the question (1-20).",
+                                "type": "number"
+                            },
+                            "question_text": {
+                                "description": "The text of the multiple choice question.",
+                                "type": "string"
+                            },
+                            "options": {
+                                "additionalProperties": false,
+                                "description": "The four options for the multiple choice question.",
+                                "properties": {
+                                    "A": {
+                                        "description": "Option A text.",
+                                        "type": "string"
+                                    },
+                                    "B": {
+                                        "description": "Option B text.",
+                                        "type": "string"
+                                    },
+                                    "C": {
+                                        "description": "Option C text.",
+                                        "type": "string"
+                                    },
+                                    "D": {
+                                        "description": "Option D text.",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "A",
+                                    "B",
+                                    "C",
+                                    "D"
+                                ],
+                                "type": "object"
+                            },
+                            "unit_mapping": {
+                                "description": "The unit from which the question is derived (e.g., 'Unit 1').",
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "question_number",
+                            "question_text",
+                            "options",
+                            "unit_mapping"
+                        ],
+                        "type": "object"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "instructions",
+                "questions"
+            ],
+            "type": "object"
+        },
+        "part_b": {
+            "additionalProperties": false,
+            "description": "Descriptive Questions section.",
+            "properties": {
+                "instructions": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "General instructions for Part B (e.g., 'Answer ALL Questions')."
+                },
+                "questions": {
+                    "description": "A list of descriptive questions, each potentially having sub-questions with an 'OR' option.",
+                    "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "question_number": {
+                                "description": "The sequential number of the main question (21-25).",
+                                "type": "number"
+                            },
+                            "unit_mapping": {
+                                "description": "The unit from which the question is derived (e.g., 'Unit 1').",
+                                "type": "string"
+                            },
+                            "sub_questions": {
+                                "description": "Sub-questions for the main descriptive question, typically 'a' and 'b' where 'b' is an alternative.",
+                                "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                        "label": {
+                                            "description": "Label for the sub-question (e.g., 'a', 'b').",
+                                            "type": "string"
+                                        },
+                                        "text": {
+                                            "description": "The text of the sub-question.",
+                                            "type": "string"
+                                        },
+                                        "is_alternative": {
+                                            "description": "True if this sub-question is an alternative (e.g., after an '(OR)'), false otherwise.",
+                                            "type": "boolean"
+                                        }
+                                    },
+                                    "required": [
+                                        "label",
+                                        "text",
+                                        "is_alternative"
+                                    ],
+                                    "type": "object"
+                                },
+                                "type": "array"
+                            }
+                        },
+                        "required": [
+                            "question_number",
+                            "unit_mapping",
+                            "sub_questions"
+                        ],
+                        "type": "object"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "instructions",
+                "questions"
+            ],
+            "type": "object"
+        },
+        "part_c": {
+            "additionalProperties": false,
+            "description": "Descriptive/Scenario-based Questions section.",
+            "properties": {
+                "instructions": {
+                    "anyOf": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "General instructions for Part C (e.g., 'Answer ANY ONE Question')."
+                },
+                "questions": {
+                    "description": "A list of scenario-based or application-oriented questions.",
+                    "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "question_number": {
+                                "description": "The sequential number of the question (e.g., 26, 27).",
+                                "type": "number"
+                            },
+                            "question_text": {
+                                "description": "The text of the scenario-based question, including any scenario description or embedded diagrams/tables converted to text.",
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "question_number",
+                            "question_text"
+                        ],
+                        "type": "object"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "instructions",
+                "questions"
+            ],
+            "type": "object"
+        }
+    },
+    "required": [
+        "header",
+        "part_a",
+        "part_b",
+        "part_c"
+    ],
+    "type": "object"
+}
