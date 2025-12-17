@@ -7,7 +7,7 @@ from app.models import Job
 from app.schemas import JobResponse
 from app.utils.exceptions import NotFound
 
-router = APIRouter(prefix="/api/v1", tags=["jobs"])
+router = APIRouter(tags=["jobs"])
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)

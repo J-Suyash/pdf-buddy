@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     llama_cloud_api_key: str = ""  # For LlamaExtract
     secret_key: str
 
+    # File storage
+    upload_dir: str = "/tmp/qp_uploads"
+    permanent_storage_dir: str = "./storage/pdfs"  # Permanent storage for PDFs
+    max_file_size_mb: int = 50
+
     class Config:
         env_file = ".env"
 

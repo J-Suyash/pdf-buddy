@@ -49,6 +49,7 @@ export interface Document {
     duration_minutes?: number;
     exam_type?: string;
     created_at: string;
+    questions?: Question[];
 }
 
 export interface Job {
@@ -107,4 +108,13 @@ export const getAllDocuments = async () => {
 export const checkHealth = async () => {
     const { data } = await api.get('/health');
     return data;
+};
+
+export const getDocumentDetails = async (documentId: string) => {
+    const { data } = await api.get<Document>(`/api/v1/documents/${documentId}`);
+    return data;
+};
+
+export const getDocumentPdfUrl = (documentId: string) => {
+    return `${API_BASE_URL}/api/v1/documents/${documentId}/pdf`;
 };

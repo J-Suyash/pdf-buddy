@@ -13,13 +13,16 @@ class Document(Base):
     job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False)
     filename = Column(String(255), nullable=False)
     file_hash = Column(String(64), nullable=True)  # SHA-256
+    file_path = Column(String(512), nullable=True)  # Path to stored PDF
     page_count = Column(Integer, default=0)
     processed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Exam metadata
     course_code = Column(String(50), nullable=True)  # e.g., "21CSE321J"
-    course_name = Column(String(255), nullable=True)  # e.g., "SDWAN NETWORKING SOLUTIONS"
+    course_name = Column(
+        String(255), nullable=True
+    )  # e.g., "SDWAN NETWORKING SOLUTIONS"
     semester = Column(String(50), nullable=True)  # e.g., "Fifth Semester"
     exam_date = Column(String(100), nullable=True)  # e.g., "NOVEMBER 2024"
     total_marks = Column(Integer, nullable=True)  # e.g., 75
@@ -28,7 +31,9 @@ class Document(Base):
 
     # Relationships
     job = relationship("Job", back_populates="documents")
-    questions = relationship("Question", back_populates="document", cascade="all, delete-orphan")
+    questions = relationship(
+        "Question", back_populates="document", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Document {self.id}: {self.filename}>"

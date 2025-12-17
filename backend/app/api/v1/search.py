@@ -6,7 +6,7 @@ from app.services.search_service import search_service
 from app.utils.exceptions import ValidationException
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1", tags=["search"])
+router = APIRouter(tags=["search"])
 
 
 @router.get("/search")
@@ -29,9 +29,7 @@ async def search(
             filters["year"] = year
 
         results = await search_service.semantic_search(
-            query=q,
-            limit=limit,
-            filters=filters if filters else None
+            query=q, limit=limit, filters=filters if filters else None
         )
 
         return results

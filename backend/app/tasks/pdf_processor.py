@@ -1,5 +1,7 @@
 from app.tasks.celery_app import celery_app
-from app.core.database import async_session
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from app.config import settings
 from app.models import Job, JobStatus, Document, Question
 from app.services.llama_service import llama_service
 from app.services.embedding_service import embedding_service
@@ -7,9 +9,14 @@ from app.core.qdrant import qdrant_service
 import logging
 import hashlib
 import os
+import shutil
 from sqlalchemy import select, update
 
 logger = logging.getLogger(__name__)
+
+# Ensure permanent storage directory exists
+PERMANENT_STORAGE_DIR = settings.permanent_storage_dir
+os.makedirs(PERMANENT_STORAGE_DIR, exist_ok=True)
 
 
 @celery_app.task(bind=True, max_retries=3, name="process_pdf_task")
@@ -26,41 +33,79 @@ def process_pdf_task(self, job_id: str, file_paths: list):
     """
     import asyncio
 
+    # Create a new engine for this task to avoid event loop issues with asyncpg
+    engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        future=True,
+        pool_pre_ping=True,
+        # Use NullPool to avoid keeping connections open in Celery workers
+        # poolclass=NullPool
+    )
+
+    # Create a local session factory
+    task_session_maker = sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
+    async def _run_task():
+        try:
+            await _process_pdf_async(job_id, file_paths, task_session_maker)
+        finally:
+            await engine.dispose()
+
     try:
         # Run async function
-        asyncio.run(_process_pdf_async(job_id, file_paths))
+        asyncio.run(_run_task())
         return {"status": "completed", "job_id": job_id}
 
     except Exception as exc:
         logger.error(f"PDF processing failed for job {job_id}: {exc}")
-        # Update job with error
-        asyncio.run(_mark_job_failed(job_id, str(exc)))
-        # Retry with exponential backoff
-        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
 
-
-async def _mark_job_failed(job_id: str, error_message: str):
-    """Mark job as failed with error message."""
-    async with async_session() as session:
-        await session.execute(
-            update(Job).where(Job.id == job_id).values(
-                status=JobStatus.FAILED.value,
-                error_message=error_message
+        # Update job with error using a fresh engine/loop context
+        # We need to recreate the engine/session for the error handler if the main block failed
+        # But simpler is to run it in a new loop if needed, or re-use logic
+        # For simplicity, we'll try to run the error handler in a fresh run
+        async def _run_error_handler():
+            err_engine = create_async_engine(settings.database_url)
+            err_session = sessionmaker(
+                err_engine, class_=AsyncSession, expire_on_commit=False
             )
+            try:
+                await _mark_job_failed(job_id, str(exc), err_session)
+            finally:
+                await err_engine.dispose()
+
+        asyncio.run(_run_error_handler())
+
+        # Retry with exponential backoff
+        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries))
+
+
+async def _mark_job_failed(job_id: str, error_message: str, session_maker):
+    """Mark job as failed with error message."""
+    async with session_maker() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.id == job_id)
+            .values(status=JobStatus.FAILED.value, error_message=error_message)
         )
         await session.commit()
 
 
-async def _process_pdf_async(job_id: str, file_paths: list):
+async def _process_pdf_async(job_id: str, file_paths: list, session_maker):
     """Async helper for PDF processing."""
-    async with async_session() as session:
+    async with session_maker() as session:
         try:
             # Update status to processing
             await session.execute(
-                update(Job).where(Job.id == job_id).values(
-                    status=JobStatus.PROCESSING.value,
-                    progress=5
-                )
+                update(Job)
+                .where(Job.id == job_id)
+                .values(status=JobStatus.PROCESSING.value, progress=5)
             )
             await session.commit()
 
@@ -73,17 +118,29 @@ async def _process_pdf_async(job_id: str, file_paths: list):
             # Process each PDF file
             for idx, file_path in enumerate(file_paths):
                 try:
-                    logger.info(f"Processing file {idx+1}/{len(file_paths)}: {file_path}")
+                    logger.info(
+                        f"Processing file {idx + 1}/{len(file_paths)}: {file_path}"
+                    )
 
                     # Calculate file hash
                     file_hash = _calculate_file_hash(file_path)
                     filename = os.path.basename(file_path)
+
+                    # Copy to permanent storage
+                    permanent_file_path = os.path.join(
+                        PERMANENT_STORAGE_DIR, f"{file_hash}_{filename}"
+                    )
+                    shutil.copy2(file_path, permanent_file_path)
+                    logger.info(
+                        f"Copied file to permanent storage: {permanent_file_path}"
+                    )
 
                     # Create document record
                     document = Document(
                         job_id=job_id,
                         filename=filename,
                         file_hash=file_hash,
+                        file_path=permanent_file_path,  # Store the permanent path
                     )
                     session.add(document)
                     await session.flush()  # Get document ID
@@ -91,31 +148,35 @@ async def _process_pdf_async(job_id: str, file_paths: list):
                     # Extract text from PDF using LlamaExtract
                     logger.info(f"Extracting text from {filename}...")
                     extraction_result = await llama_service.extract_from_pdf(file_path)
-                    
+
                     extracted_text = extraction_result.get("text", "")
                     pages = extraction_result.get("pages", [])
                     structured_data = extraction_result.get("structured_data", {})
-                    
+
                     # Extract exam metadata from structured data
                     logger.info(f"Extracting exam metadata from {filename}...")
-                    header = structured_data.get("header", {}) if isinstance(structured_data, dict) else {}
-                    
+                    header = (
+                        structured_data.get("header", {})
+                        if isinstance(structured_data, dict)
+                        else {}
+                    )
+
                     # Update document with metadata and page count
                     document.page_count = len(pages)
                     document.course_code = header.get("course_code")
                     document.course_name = header.get("course_name")
                     document.semester = header.get("semester")
                     document.exam_date = header.get("exam_date_month")
-                    
+
                     # Parse duration (e.g., "3 hours" -> 180 minutes)
                     duration_str = header.get("duration", "")
                     if "hour" in duration_str.lower():
                         try:
-                            hours = int(''.join(filter(str.isdigit, duration_str)))
+                            hours = int("".join(filter(str.isdigit, duration_str)))
                             document.duration_minutes = hours * 60
                         except:
                             document.duration_minutes = None
-                    
+
                     document.total_marks = header.get("max_marks")
                     document.exam_type = "End Semester"  # Default, can be inferred
                     total_pages += len(pages)
@@ -123,25 +184,23 @@ async def _process_pdf_async(job_id: str, file_paths: list):
                     # Update progress
                     progress = 10 + (idx * 30 // len(file_paths))
                     await session.execute(
-                        update(Job).where(Job.id == job_id).values(
-                            progress=progress,
-                            processed_pages=total_pages
-                        )
+                        update(Job)
+                        .where(Job.id == job_id)
+                        .values(progress=progress, processed_pages=total_pages)
                     )
                     await session.commit()
 
                     # Parse questions from structured data
                     logger.info(f"Parsing questions from {filename}...")
                     questions_by_parts = await llama_service.extract_questions_by_parts(
-                        extracted_text, 
-                        structured_data=structured_data
+                        extracted_text, structured_data=structured_data
                     )
-                    
+
                     # Flatten all questions from all parts
                     questions_data = []
                     for part_questions in questions_by_parts.values():
                         questions_data.extend(part_questions)
-                    
+
                     logger.info(f"Found {len(questions_data)} questions in {filename}")
 
                     # Store questions in database
@@ -167,24 +226,28 @@ async def _process_pdf_async(job_id: str, file_paths: list):
                             marks=q_data.get("marks"),
                             # Additional flags
                             is_mandatory=1 if q_data.get("is_mandatory", True) else 0,
-                            has_or_option=1 if q_data.get("has_or_option", False) else 0,
+                            has_or_option=1
+                            if q_data.get("has_or_option", False)
+                            else 0,
                         )
                         session.add(question)
                         await session.flush()  # Get question ID
 
                         # Prepare for embedding and indexing
-                        all_questions_for_indexing.append({
-                            "id": question.id,
-                            "content": question.content,
-                            "document_id": document.id,
-                            "part": question.part,
-                            "subject": question.subject,
-                            "topic": question.topic,
-                            "difficulty": question.difficulty,
-                            "question_type": question.question_type,
-                            "year": question.year,
-                            "marks": question.marks,
-                        })
+                        all_questions_for_indexing.append(
+                            {
+                                "id": question.id,
+                                "content": question.content,
+                                "document_id": document.id,
+                                "part": question.part,
+                                "subject": question.subject,
+                                "topic": question.topic,
+                                "difficulty": question.difficulty,
+                                "question_type": question.question_type,
+                                "year": question.year,
+                                "marks": question.marks,
+                            }
+                        )
 
                     total_questions += len(questions_data)
                     await session.commit()
@@ -192,10 +255,9 @@ async def _process_pdf_async(job_id: str, file_paths: list):
                     # Update progress
                     progress = 40 + (idx * 30 // len(file_paths))
                     await session.execute(
-                        update(Job).where(Job.id == job_id).values(
-                            progress=progress,
-                            total_questions=total_questions
-                        )
+                        update(Job)
+                        .where(Job.id == job_id)
+                        .values(progress=progress, total_questions=total_questions)
                     )
                     await session.commit()
 
@@ -206,8 +268,10 @@ async def _process_pdf_async(job_id: str, file_paths: list):
 
             # Generate embeddings and index in Qdrant
             if all_questions_for_indexing:
-                logger.info(f"Generating embeddings for {len(all_questions_for_indexing)} questions...")
-                
+                logger.info(
+                    f"Generating embeddings for {len(all_questions_for_indexing)} questions..."
+                )
+
                 # Update progress
                 await session.execute(
                     update(Job).where(Job.id == job_id).values(progress=75)
@@ -220,19 +284,23 @@ async def _process_pdf_async(job_id: str, file_paths: list):
 
                 # Prepare data for Qdrant
                 qdrant_points = []
-                for i, (q, embedding) in enumerate(zip(all_questions_for_indexing, embeddings)):
-                    qdrant_points.append({
-                        "question_id": q["id"],
-                        "vector": embedding,
-                        "text": q["content"],
-                        "document_id": q["document_id"],
-                        "subject": q["subject"],
-                        "topic": q["topic"],
-                        "difficulty": q["difficulty"],
-                        "question_type": q["question_type"],
-                        "year": q["year"],
-                        "marks": q["marks"],
-                    })
+                for i, (q, embedding) in enumerate(
+                    zip(all_questions_for_indexing, embeddings)
+                ):
+                    qdrant_points.append(
+                        {
+                            "question_id": q["id"],
+                            "vector": embedding,
+                            "text": q["content"],
+                            "document_id": q["document_id"],
+                            "subject": q["subject"],
+                            "topic": q["topic"],
+                            "difficulty": q["difficulty"],
+                            "question_type": q["question_type"],
+                            "year": q["year"],
+                            "marks": q["marks"],
+                        }
+                    )
 
                 # Index in Qdrant
                 logger.info(f"Indexing {len(qdrant_points)} questions in Qdrant...")
@@ -242,22 +310,28 @@ async def _process_pdf_async(job_id: str, file_paths: list):
                 # Update qdrant_id in database
                 for i, q in enumerate(all_questions_for_indexing):
                     await session.execute(
-                        update(Question).where(Question.id == q["id"]).values(qdrant_id=i)
+                        update(Question)
+                        .where(Question.id == q["id"])
+                        .values(qdrant_id=i)
                     )
                 await session.commit()
 
             # Mark job as completed
             await session.execute(
-                update(Job).where(Job.id == job_id).values(
+                update(Job)
+                .where(Job.id == job_id)
+                .values(
                     status=JobStatus.COMPLETED.value,
                     progress=100,
                     total_questions=total_questions,
-                    processed_pages=total_pages
+                    processed_pages=total_pages,
                 )
             )
             await session.commit()
 
-            logger.info(f"Job {job_id} completed successfully. Processed {total_questions} questions from {total_pages} pages")
+            logger.info(
+                f"Job {job_id} completed successfully. Processed {total_questions} questions from {total_pages} pages"
+            )
 
             # Clean up temporary files
             for file_path in file_paths:
@@ -271,10 +345,9 @@ async def _process_pdf_async(job_id: str, file_paths: list):
         except Exception as e:
             logger.error(f"Error processing PDF: {e}")
             await session.execute(
-                update(Job).where(Job.id == job_id).values(
-                    status=JobStatus.FAILED.value,
-                    error_message=str(e)
-                )
+                update(Job)
+                .where(Job.id == job_id)
+                .values(status=JobStatus.FAILED.value, error_message=str(e))
             )
             await session.commit()
             raise

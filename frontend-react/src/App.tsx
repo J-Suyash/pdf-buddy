@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import QuestionLibrary from './pages/QuestionLibrary';
 import UploadPage from './pages/Upload';
 import SearchPage from './pages/Search';
+import QuestionPaper from './pages/QuestionPaper';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,6 +26,7 @@ function App() {
             <Route path="/library" element={<QuestionLibrary />} />
             <Route path="/upload" element={<UploadPage />} />
             <Route path="/search" element={<SearchPage />} />
+            <Route path="/paper/:documentId" element={<QuestionPaper />} />
           </Routes>
         </Layout>
       </BrowserRouter>

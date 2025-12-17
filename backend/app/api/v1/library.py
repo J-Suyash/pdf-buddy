@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
-from typing import List
+from typing import List, Optional
 
 from app.core.database import get_db
 from app.models import Question, Document
@@ -15,14 +15,19 @@ router = APIRouter()
 async def get_all_questions(
     skip: int = 0,
     limit: int = 1000,
-    search: str = None,
-    course_code: str = None,
-    year: str = None,
-    exam_type: str = None,
-    db: AsyncSession = Depends(get_db)
+    search: Optional[str] = None,
+    course_code: Optional[str] = None,
+    year: Optional[str] = None,
+    exam_type: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
 ):
     """Get all questions from the database with optional filtering."""
-    query = select(Question).join(Document).options(selectinload(Question.document)).order_by(Question.created_at.desc())
+    query = (
+        select(Question)
+        .join(Document)
+        .options(selectinload(Question.document))
+        .order_by(Question.created_at.desc())
+    )
 
     if search:
         search_term = f"%{search}%"
@@ -31,7 +36,7 @@ async def get_all_questions(
                 Question.content.ilike(search_term),
                 Question.subject.ilike(search_term),
                 Document.course_name.ilike(search_term),
-                Document.course_code.ilike(search_term)
+                Document.course_code.ilike(search_term),
             )
         )
 
@@ -44,9 +49,7 @@ async def get_all_questions(
     if exam_type:
         query = query.where(Document.exam_type == exam_type)
 
-    result = await db.execute(
-        query.offset(skip).limit(limit)
-    )
+    result = await db.execute(query.offset(skip).limit(limit))
     questions = result.scalars().all()
     return questions
 
@@ -55,11 +58,11 @@ async def get_all_questions(
 async def get_all_documents(
     skip: int = 0,
     limit: int = 100,
-    search: str = None,
-    course_code: str = None,
-    year: str = None,
-    exam_type: str = None,
-    db: AsyncSession = Depends(get_db)
+    search: Optional[str] = None,
+    course_code: Optional[str] = None,
+    year: Optional[str] = None,
+    exam_type: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
 ):
     """Get all documents from the database with optional filtering."""
 
@@ -68,31 +71,28 @@ async def get_all_documents(
     if search:
         search_term = f"%{search}%"
         query = query.where(
-            (Document.filename.ilike(search_term)) |
-            (Document.course_name.ilike(search_term)) |
-            (Document.course_code.ilike(search_term))
+            (Document.filename.ilike(search_term))
+            | (Document.course_name.ilike(search_term))
+            | (Document.course_code.ilike(search_term))
         )
-    
+
     if course_code:
         query = query.where(Document.course_code.ilike(f"%{course_code}%"))
-        
+
     if year:
         query = query.where(Document.exam_date.ilike(f"%{year}%"))
-        
+
     if exam_type:
         query = query.where(Document.exam_type == exam_type)
 
-    result = await db.execute(
-        query.offset(skip).limit(limit)
-    )
+    result = await db.execute(query.offset(skip).limit(limit))
     documents = result.scalars().all()
-    
+
     return [
         {
             "id": str(doc.id),
             "filename": doc.filename,
             "file_hash": doc.file_hash,
-
             "page_count": doc.page_count,
             "course_code": doc.course_code,
             "course_name": doc.course_name,

@@ -4,23 +4,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 import uuid
 import os
+import shutil
 import logging
 
 from app.core.database import get_db
 from app.models import Job, Document, JobStatus
 from app.schemas import JobUploadResponse
 from app.utils.exceptions import ValidationException
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1", tags=["upload"])
+router = APIRouter(tags=["upload"])
 
-UPLOAD_DIR = "/tmp/qp_uploads"
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+UPLOAD_DIR = settings.upload_dir
+PERMANENT_STORAGE_DIR = settings.permanent_storage_dir
+MAX_FILE_SIZE = settings.max_file_size_mb * 1024 * 1024
 ALLOWED_TYPES = {"application/pdf"}
 
-# Ensure upload directory exists
+# Ensure directories exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(PERMANENT_STORAGE_DIR, exist_ok=True)
 
 
 @router.post("/upload", response_model=JobUploadResponse)
@@ -52,7 +56,7 @@ async def upload_files(
             raise ValidationException(f"{file.filename} exceeds 50MB limit")
 
         filenames.append(file.filename)
-        
+
         # Save file temporarily
         file_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{file.filename}")
         with open(file_path, "wb") as f:
@@ -73,8 +77,9 @@ async def upload_files(
 
         # Trigger Celery task for background processing
         from app.tasks.pdf_processor import process_pdf_task
+
         process_pdf_task.delay(job_id, file_paths)
-        
+
         logger.info(f"Job {job_id} created and queued for processing")
 
         return JobUploadResponse(

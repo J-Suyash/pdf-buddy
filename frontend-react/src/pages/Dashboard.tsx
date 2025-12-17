@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { getAllQuestions, getAllDocuments } from '../api/client';
 import { Library, FileText, CheckCircle, FileQuestion, ArrowUpRight, Clock } from 'lucide-react';
 import { cn } from '../utils';
@@ -37,6 +38,7 @@ function StatCard({ title, value, icon: Icon, colorClass, delay }: StatCardProps
 }
 
 export default function Dashboard() {
+    const navigate = useNavigate();
     const { data: questions = [], isLoading: questionsLoading } = useQuery({
         queryKey: ['questions'],
         queryFn: () => getAllQuestions(),
@@ -149,7 +151,11 @@ export default function Dashboard() {
                     <h2 className="text-xl font-bold font-heading mb-6 text-foreground">Recent Documents</h2>
                     <div className="space-y-4">
                         {documents.slice(0, 5).map((doc, i) => (
-                            <div key={doc.id} className="flex items-center gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer group">
+                            <div 
+                                key={doc.id} 
+                                onClick={() => navigate(`/paper/${doc.id}`)}
+                                className="flex items-center gap-4 p-3 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer group"
+                            >
                                 <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center text-muted-foreground group-hover:text-primary transition-colors">
                                     <FileText className="w-5 h-5" />
                                 </div>
