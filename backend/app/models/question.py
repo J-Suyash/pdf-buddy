@@ -45,3 +45,15 @@ class Question(Base):
 
     def __repr__(self):
         return f"<Question {self.id}: {self.subject}>"
+
+    @property
+    def course_code(self):
+        return self.document.course_code if self.document else None
+
+    @property
+    def course_name(self):
+        return self.document.course_name if self.document else None
+
+    @property
+    def exam_date(self):
+        return self.document.exam_date if self.document else None

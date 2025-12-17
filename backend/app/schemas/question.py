@@ -27,6 +27,11 @@ class QuestionResponse(BaseModel):
     page_number: Optional[int] = None
     score: Optional[float] = None  # For search results
     
+    # Document Metadata
+    course_code: Optional[str] = None
+    course_name: Optional[str] = None
+    exam_date: Optional[str] = None
+    
     # Additional flags
     is_mandatory: bool = True
     has_or_option: bool = False

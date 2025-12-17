@@ -18,4 +18,5 @@ celery_app.conf.update(
     task_soft_time_limit=3000,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    imports=["app.tasks.pdf_processor"],  # Register task modules
 )
