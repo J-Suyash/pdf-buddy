@@ -1,17 +1,18 @@
-# Standard python-slim-bookworm as the base
+# Builder stage
 FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /app
 
-# Install uv using pip
+# Install uv
 RUN pip install --no-cache-dir uv
 
-# Set the virtualenv location outside of /app so it's not hidden by volumes
-ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+# Create a virtual environment at /opt/venv
+RUN uv venv /opt/venv
 
-# Install dependencies only
-COPY pyproject.toml uv.lock ./
-RUN uv sync --no-dev --no-install-project
+# Install dependencies
+# We copy README.md because pyproject.toml references it
+COPY pyproject.toml uv.lock README.md ./
+RUN VIRTUAL_ENV=/opt/venv uv pip install .
 
 # Final stage
 FROM python:3.11-slim-bookworm
@@ -23,11 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy venv from builder
+# Copy the venv from builder
 COPY --from=builder /opt/venv /opt/venv
 
 # Set environment variables
 ENV PATH="/opt/venv/bin:$PATH"
+ENV VIRTUAL_ENV="/opt/venv"
 ENV PYTHONUNBUFFERED=1
 
 # Copy application code
