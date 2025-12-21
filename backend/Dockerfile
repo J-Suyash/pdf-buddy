@@ -3,8 +3,11 @@ FROM python:3.11-slim-bookworm AS builder
 
 WORKDIR /app
 
-# Install uv using pip for maximum compatibility
+# Install uv using pip
 RUN pip install --no-cache-dir uv
+
+# Set the virtualenv location outside of /app so it's not hidden by volumes
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 # Install dependencies only
 COPY pyproject.toml uv.lock ./
@@ -20,12 +23,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy uv and venv from builder
-COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
-COPY --from=builder /app/.venv /app/.venv
+# Copy venv from builder
+COPY --from=builder /opt/venv /opt/venv
 
 # Set environment variables
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/opt/venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
 # Copy application code
