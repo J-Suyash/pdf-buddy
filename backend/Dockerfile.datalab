@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir uv
 
 # Install dependencies only
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --no-dev --no-install-project
 
 # Final stage
 FROM python:3.11-slim-bookworm
