@@ -1,0 +1,51 @@
+# Standard python-slim-bookworm as the base
+FROM python:3.11-slim-bookworm AS builder
+
+WORKDIR /app
+
+# Install uv using pip for maximum compatibility
+RUN pip install --no-cache-dir uv
+
+# Install dependencies only
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+# Final stage
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+# Install system dependencies for Chromium and Xvfb
+# We keep it minimal and let apt resolve dependencies of chromium
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    chromium-driver \
+    xvfb \
+    libpq-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy uv from builder or just use the binary
+COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
+COPY --from=builder /app/.venv /app/.venv
+
+# Set environment variables
+ENV PATH="/app/.venv/bin:$PATH"
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-dev-shm-usage"
+ENV DISPLAY=:99
+ENV PYTHONUNBUFFERED=1
+
+# Copy application code
+COPY . .
+
+# Make entrypoint executable
+RUN chmod +x entrypoint.datalab.sh
+
+# Create storage directories
+RUN mkdir -p /app/storage/pdfs /app/storage/datalab
+
+ENTRYPOINT ["./entrypoint.datalab.sh"]
+
+# Default command - start Celery worker
+CMD ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info", "-Q", "datalab", "--concurrency=1"]

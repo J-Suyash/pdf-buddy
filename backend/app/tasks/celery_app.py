@@ -1,4 +1,5 @@
 from celery import Celery
+from kombu import Queue
 from app.config import settings
 
 celery_app = Celery(
@@ -18,5 +19,19 @@ celery_app.conf.update(
     task_soft_time_limit=3000,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
-    imports=["app.tasks.pdf_processor"],  # Register task modules
+    imports=[
+        "app.tasks.pdf_processor",
+        "app.tasks.datalab_processor",
+    ],
+    # Define task queues
+    task_queues=(
+        Queue("celery", routing_key="celery"),  # Default queue for LlamaCloud tasks
+        Queue("datalab", routing_key="datalab"),  # Separate queue for datalab tasks
+    ),
+    task_default_queue="celery",
+    task_default_routing_key="celery",
+    # Route datalab tasks to datalab queue
+    task_routes={
+        "process_datalab_pdf_task": {"queue": "datalab"},
+    },
 )

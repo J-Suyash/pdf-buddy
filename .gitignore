@@ -63,3 +63,7 @@ alembic/versions/*.pyc
 # Database
 *.db
 *.sqlite
+
+#local files
+/skills
+/docs

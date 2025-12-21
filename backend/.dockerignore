@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+.env.local
+.vscode/
+.idea/
+.git/
+.github/
+storage/
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

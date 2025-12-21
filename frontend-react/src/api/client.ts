@@ -67,12 +67,32 @@ export interface SearchResult extends Question {
     score: number;
 }
 
+export interface DatalabSearchResult {
+    id: string;
+    score: number;
+    text: string;
+    block_type: string;
+    pdf_id: string;
+    page_id: string;
+    page_num: number;
+}
+
 // API Functions
 export const uploadFiles = async (files: File[]) => {
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
 
     const { data } = await api.post<{ job_id: string; status_url: string }>('/api/v1/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+};
+
+export const uploadDatalabFile = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const { data } = await api.post<{ job_id: string; status_url: string }>('/api/v1/datalab/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
     return data;
@@ -85,6 +105,13 @@ export const getJobStatus = async (jobId: string) => {
 
 export const searchQuestions = async (query: string, limit = 20) => {
     const { data } = await api.get<{ results: SearchResult[] }>('/api/v1/search', {
+        params: { q: query, limit },
+    });
+    return data.results;
+};
+
+export const searchDatalabChunks = async (query: string, limit = 20) => {
+    const { data } = await api.get<{ results: DatalabSearchResult[] }>('/api/v1/datalab/search', {
         params: { q: query, limit },
     });
     return data.results;

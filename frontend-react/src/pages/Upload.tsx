@@ -1,15 +1,21 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { uploadFiles, getJobStatus } from '../api/client';
-import { Upload as UploadIcon, X, CheckCircle2, FileText, Loader2, Zap } from 'lucide-react';
+import { uploadFiles, uploadDatalabFile, getJobStatus } from '../api/client';
+import { Upload as UploadIcon, X, CheckCircle2, FileText, Loader2, Zap, BrainCircuit, FileStack } from 'lucide-react';
 import { cn } from '../utils';
 
 export default function Upload() {
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [jobId, setJobId] = useState<string | null>(null);
+    const [uploadType, setUploadType] = useState<'datalab' | 'pdf'>('datalab');
 
     const uploadMutation = useMutation({
-        mutationFn: uploadFiles,
+        mutationFn: async (files: File[]) => {
+            if (uploadType === 'datalab') {
+                return uploadDatalabFile(files[0]);
+            }
+            return uploadFiles(files);
+        },
         onSuccess: (data) => {
             setJobId(data.job_id);
             setSelectedFiles([]);
@@ -29,7 +35,11 @@ export default function Upload() {
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
-        setSelectedFiles(prev => [...prev, ...files].slice(0, 10));
+        if (uploadType === 'datalab') {
+            setSelectedFiles(files.slice(0, 1));
+        } else {
+            setSelectedFiles(prev => [...prev, ...files].slice(0, 10));
+        }
     };
 
     const handleUpload = () => {
@@ -54,13 +64,50 @@ export default function Upload() {
                 </p>
             </div>
 
+            <div className="flex justify-center">
+                <div className="bg-card border border-border p-1 rounded-xl inline-flex shadow-sm">
+                    <button
+                        className={cn(
+                            "px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+                            uploadType === 'datalab'
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        )}
+                        onClick={() => {
+                            setUploadType('datalab');
+                            setSelectedFiles([]);
+                            setJobId(null);
+                        }}
+                    >
+                        <BrainCircuit className="w-4 h-4" />
+                        DataLab (Enhanced OCR)
+                    </button>
+                    <button
+                        className={cn(
+                            "px-6 py-2.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2",
+                            uploadType === 'pdf'
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        )}
+                        onClick={() => {
+                            setUploadType('pdf');
+                            setSelectedFiles([]);
+                            setJobId(null);
+                        }}
+                    >
+                        <FileStack className="w-4 h-4" />
+                        Standard PDF
+                    </button>
+                </div>
+            </div>
+
             <div className="grid gap-8">
                 {/* Upload Zone */}
                 <div className="group relative rounded-2xl border-2 border-dashed border-muted-foreground/20 hover:border-primary transition-all duration-300 bg-card hover:bg-muted/50">
                     <input
                         type="file"
                         accept=".pdf"
-                        multiple
+                        multiple={uploadType === 'pdf'}
                         onChange={handleFileSelect}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                         id="file-upload"
@@ -69,9 +116,13 @@ export default function Upload() {
                         <div className="w-20 h-20 mx-auto rounded-full bg-muted flex items-center justify-center mb-6 group-hover:bg-primary/10 transition-colors">
                             <UploadIcon className="w-10 h-10 text-muted-foreground group-hover:text-primary" />
                         </div>
-                        <h3 className="text-2xl font-bold font-heading text-foreground">Drop PDFs here</h3>
+                        <h3 className="text-2xl font-bold font-heading text-foreground">
+                            {uploadType === 'datalab' ? 'Drop single PDF here' : 'Drop PDFs here'}
+                        </h3>
                         <p className="text-muted-foreground max-w-sm mx-auto">
-                            Support for scanned and digital PDFs. Up to 10 files at once.
+                            {uploadType === 'datalab' 
+                                ? 'Enhanced processing for complex documents. 1 file limit.' 
+                                : 'Support for scanned and digital PDFs. Up to 10 files at once.'}
                         </p>
                     </div>
                 </div>
@@ -120,6 +171,7 @@ export default function Upload() {
                     </div>
                 )}
 
+
                 {/* Status Card */}
                 {jobStatus && (
                     <div className="rounded-2xl bg-card border border-border p-8 space-y-8 animate-fade-in shadow-sm">
@@ -155,7 +207,9 @@ export default function Upload() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="p-6 bg-muted/30 rounded-xl border border-border text-center">
-                                <p className="text-sm text-muted-foreground mb-1 uppercase tracking-wide">Questions Extracted</p>
+                                <p className="text-sm text-muted-foreground mb-1 uppercase tracking-wide">
+                                    {uploadType === 'datalab' ? 'Chunks Extracted' : 'Questions Extracted'}
+                                </p>
                                 <p className="text-4xl font-bold font-heading text-primary">{jobStatus.total_questions}</p>
                             </div>
                             <div className="p-6 bg-muted/30 rounded-xl border border-border text-center">
