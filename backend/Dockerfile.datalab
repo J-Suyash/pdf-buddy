@@ -27,12 +27,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv in final stage (needed for uv run commands)
+RUN pip install --no-cache-dir uv
+
 # Copy venv from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Set environment variables
+# Set environment variables (consistent with main Dockerfile)
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-ENV VIRTUAL_ENV="/opt/venv"
 ENV CHROME_BIN=/usr/bin/chromium
 ENV CHROMIUM_FLAGS="--no-sandbox --disable-dev-shm-usage"
 ENV DISPLAY=:99
@@ -44,10 +47,10 @@ COPY . .
 # Make entrypoint executable
 RUN chmod +x entrypoint.datalab.sh
 
-# Create storage directories
-RUN mkdir -p /app/storage/pdfs /app/storage/datalab
+# Create storage directories (including uploads for shared storage)
+RUN mkdir -p /app/storage/uploads /app/storage/pdfs /app/storage/datalab
 
-ENTRYPOINT ["./entrypoint.datalab.sh"]
+ENTRYPOINT ["/bin/bash", "./entrypoint.datalab.sh"]
 
-# Default command - start Celery worker
-CMD ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info", "-Q", "datalab", "--concurrency=1"]
+# Default command - use uv run for consistency
+CMD ["uv", "run", "celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=info", "-Q", "datalab", "--concurrency=1"]

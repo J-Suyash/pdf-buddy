@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     secret_key: str
 
     # File storage
-    upload_dir: str = "/tmp/qp_uploads"
+    upload_dir: str = "./storage/uploads"  # Shared storage for temporary uploads
     permanent_storage_dir: str = "./storage/pdfs"  # Permanent storage for PDFs
     datalab_storage_dir: str = "./storage/datalab"  # Storage for datalab OCR output
     max_file_size_mb: int = 50

@@ -63,12 +63,12 @@ services:
     <<: *backend-common
     ports:
       - "8000:8000"
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   # Celery worker for PDF processing (LlamaCloud)
   celery_worker:
     <<: *backend-common
-    command: celery -A app.tasks.celery_app worker --loglevel=info -Q celery
+    command: uv run celery -A app.tasks.celery_app worker --loglevel=info -Q celery
 
   # Celery worker for Datalab processing (requires Chromium)
   celery_worker_datalab:
@@ -88,7 +88,7 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
-    command: celery -A app.tasks.celery_app worker --loglevel=info -Q datalab --concurrency=1
+    command: uv run celery -A app.tasks.celery_app worker --loglevel=info -Q datalab --concurrency=1
 
 volumes:
   postgres_data:

@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 from app.models import Job, JobStatus, Document, Question
 from app.services.llama_service import llama_service
+from app.services.datalab_service import datalab_service
 from app.services.embedding_service import embedding_service
 from app.core.qdrant import qdrant_service
 import logging
@@ -22,14 +23,23 @@ os.makedirs(PERMANENT_STORAGE_DIR, exist_ok=True)
 @celery_app.task(bind=True, max_retries=3, name="process_pdf_task")
 def process_pdf_task(self, job_id: str, file_paths: list):
     """
-    Process PDF files:
+    Process PDF files using Datalab browser automation (primary) with LlamaCloud API fallback.
+
+    Processing flow:
     1. Update job status to processing
-    2. Extract text from PDF using LlamaCloud
-    3. Parse and extract questions
-    4. Store questions in database
-    5. Generate embeddings
-    6. Index in Qdrant
-    7. Update job status to completed
+    2. Try Datalab browser automation first (primary method)
+    3. If Datalab fails, fall back to LlamaCloud API
+    4. Parse and extract questions
+    5. Store questions in database
+    6. Generate embeddings
+    7. Index in Qdrant
+    8. Update job status to completed
+
+    Datalab is preferred because:
+    - Uses browser automation for better anti-bot detection
+    - No API rate limits
+    - More reliable for complex PDFs
+    - Free to use
     """
     import asyncio
 
@@ -98,7 +108,7 @@ async def _mark_job_failed(job_id: str, error_message: str, session_maker):
 
 
 async def _process_pdf_async(job_id: str, file_paths: list, session_maker):
-    """Async helper for PDF processing."""
+    """Async helper for PDF processing with Datalab primary and Llama fallback."""
     async with session_maker() as session:
         try:
             # Update status to processing
@@ -145,13 +155,50 @@ async def _process_pdf_async(job_id: str, file_paths: list, session_maker):
                     session.add(document)
                     await session.flush()  # Get document ID
 
-                    # Extract text from PDF using LlamaExtract
-                    logger.info(f"Extracting text from {filename}...")
-                    extraction_result = await llama_service.extract_from_pdf(file_path)
+                    # Try Datalab browser automation first (primary method)
+                    logger.info(f"Attempting Datalab browser automation for {filename}...")
+                    try:
+                        extraction_result = await datalab_service.process_pdf(
+                            file_path=file_path,
+                            job_id=job_id,
+                        )
 
-                    extracted_text = extraction_result.get("text", "")
-                    pages = extraction_result.get("pages", [])
-                    structured_data = extraction_result.get("structured_data", {})
+                        # Parse Datalab response
+                        parsed_result = datalab_service.parse_response(extraction_result, job_id)
+
+                        if not parsed_result.success:
+                            raise RuntimeError(f"Datalab processing failed: {parsed_result.status}")
+
+                        # Convert Datalab result to expected format
+                        extracted_text = parsed_result.markdown
+                        pages = [{"text": parsed_result.markdown, "page_num": 1}]
+                        structured_data = {
+                            "header": {},  # Datalab doesn't provide structured header
+                            "part_a": {"questions": []},
+                            "part_b": {"questions": []},
+                            "part_c": {"questions": []},
+                        }
+
+                        # Try to extract questions from Datalab chunks
+                        questions_by_parts = await _extract_questions_from_datalab(
+                            parsed_result, document.id
+                        )
+
+                        logger.info(f"Datalab processing successful for {filename}")
+
+                    except Exception as datalab_error:
+                        logger.warning(
+                            f"Datalab browser automation failed for {filename}: {datalab_error}. "
+                            f"Falling back to LlamaCloud API..."
+                        )
+
+                        # Fallback to LlamaCloud API
+                        logger.info(f"Extracting text from {filename} using LlamaCloud API...")
+                        extraction_result = await llama_service.extract_from_pdf(file_path)
+
+                        extracted_text = extraction_result.get("text", "")
+                        pages = extraction_result.get("pages", [])
+                        structured_data = extraction_result.get("structured_data", {})
 
                     # Extract exam metadata from structured data
                     logger.info(f"Extracting exam metadata from {filename}...")
@@ -351,6 +398,101 @@ async def _process_pdf_async(job_id: str, file_paths: list, session_maker):
             )
             await session.commit()
             raise
+
+
+async def _extract_questions_from_datalab(parsed_result, document_id: str):
+    """
+    Extract questions from Datalab parsed result.
+
+    Datalab returns chunks/blocks with text content. We need to parse these
+    into question format compatible with the existing schema.
+
+    Returns:
+        Dict with keys "A", "B", "C" containing lists of questions
+    """
+    from app.services.datalab_service import ParsedDatalabResult
+
+    result = {"A": [], "B": [], "C": []}
+
+    if not isinstance(parsed_result, ParsedDatalabResult):
+        logger.warning(f"Invalid parsed result type: {type(parsed_result)}")
+        return result
+
+    # Process each page's blocks
+    for page in parsed_result.pages:
+        for block in page.blocks:
+            text = block.text.strip()
+
+            if not text or len(text) < 10:
+                continue
+
+            # Try to identify question type from text patterns
+            # This is a simple heuristic - can be improved with better parsing
+
+            # Check for question number pattern (e.g., "1.", "Q1.", "1)")
+            import re
+            question_match = re.match(r'^(\d+)[\.\)]\s*(.+)', text, re.DOTALL)
+
+            if question_match:
+                q_num = question_match.group(1)
+                q_text = question_match.group(2).strip()
+
+                # Determine part based on question number
+                try:
+                    num = int(q_num)
+                    if 1 <= num <= 20:
+                        part = "A"  # MCQs
+                        marks = 1
+                        is_mcq = True
+                    elif 21 <= num <= 25:
+                        part = "B"  # Descriptive
+                        marks = 8
+                        is_mcq = False
+                    else:
+                        part = "C"  # Scenario
+                        marks = 15
+                        is_mcq = False
+                except:
+                    part = "C"
+                    marks = 15
+                    is_mcq = False
+
+                question_data = {
+                    "content": q_text,
+                    "question_number": q_num,
+                    "part": part,
+                    "part_marks": marks,
+                    "unit": None,  # Can't determine from text alone
+                    "is_mcq": is_mcq,
+                    "marks": marks,
+                    "question_type": "mcq" if is_mcq else "descriptive",
+                    "is_mandatory": True,
+                    "has_or_option": False,
+                }
+
+                result[part].append(question_data)
+            else:
+                # No question number found, treat as descriptive text
+                # This could be instructions or part of a question
+                # For now, skip or add to Part C
+                if len(text) > 50:  # Likely a question
+                    result["C"].append({
+                        "content": text,
+                        "question_number": "?",
+                        "part": "C",
+                        "part_marks": 15,
+                        "unit": None,
+                        "is_mcq": False,
+                        "marks": 15,
+                        "question_type": "descriptive",
+                        "is_mandatory": False,
+                        "has_or_option": False,
+                    })
+
+    total = sum(len(q) for q in result.values())
+    logger.info(f"Extracted {total} questions from Datalab chunks: A={len(result['A'])}, B={len(result['B'])}, C={len(result['C'])}")
+
+    return result
 
 
 def _calculate_file_hash(file_path: str) -> str:
