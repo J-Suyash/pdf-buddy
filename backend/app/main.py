@@ -39,16 +39,10 @@ _allowed_origins = [
 if extra := os.getenv("EXTRA_CORS_ORIGINS"):
     _allowed_origins.extend(extra.split(","))
 
-def _cors_origin_callback(origin: str) -> bool:
-    if origin in _allowed_origins:
-        return True
-    if origin and origin.endswith(".pdfbuddy.pages.dev"):
-        return True
-    return False
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_func=_cors_origin_callback,
+    allow_origins=_allowed_origins,
+    allow_origin_regex=r"https://.*\.pdfbuddy\.pages\.dev",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
