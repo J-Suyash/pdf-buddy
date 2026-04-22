@@ -1,0 +1,17 @@
+[Unit]
+Description=PDF Buddy Celery Datalab Worker (Chromium)
+After=network.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/pdf-buddy/backend
+EnvironmentFile=/home/ubuntu/pdf-buddy/backend/.env
+Environment=DISPLAY=:99
+ExecStart=/usr/bin/xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" /home/ubuntu/.local/bin/uv run celery -A app.tasks.celery_app worker --loglevel=info -Q datalab --concurrency=1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

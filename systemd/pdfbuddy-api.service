@@ -1,0 +1,16 @@
+[Unit]
+Description=PDF Buddy API Server
+After=network.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/pdf-buddy/backend
+EnvironmentFile=/home/ubuntu/pdf-buddy/backend/.env
+ExecStart=/home/ubuntu/.local/bin/uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

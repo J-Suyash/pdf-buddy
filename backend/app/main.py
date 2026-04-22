@@ -30,9 +30,18 @@ app = FastAPI(
 # Enable CORS for frontend
 from fastapi.middleware.cors import CORSMiddleware
 
+import os
+
+_allowed_origins = [
+    "https://pdfbuddy.suyashja.in",
+    "http://localhost:5173",
+]
+if extra := os.getenv("EXTRA_CORS_ORIGINS"):
+    _allowed_origins.extend(extra.split(","))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

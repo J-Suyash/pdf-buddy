@@ -1,0 +1,16 @@
+[Unit]
+Description=PDF Buddy Celery Worker
+After=network.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/pdf-buddy/backend
+EnvironmentFile=/home/ubuntu/pdf-buddy/backend/.env
+ExecStart=/home/ubuntu/.local/bin/uv run celery -A app.tasks.celery_app worker --loglevel=info -Q celery
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

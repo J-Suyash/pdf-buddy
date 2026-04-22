@@ -36,6 +36,7 @@ env/
 # Environment variables
 .env
 .env.local
+.env.production
 
 # Testing
 .pytest_cache/
@@ -67,3 +68,8 @@ alembic/versions/*.pyc
 #local files
 /skills
 /docs
+
+# Storage (uploaded PDFs and processed data)
+backend/storage/pdfs/
+backend/storage/datalab/
+backend/storage/uploads/
