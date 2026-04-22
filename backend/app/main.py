@@ -42,7 +42,7 @@ if extra := os.getenv("EXTRA_CORS_ORIGINS"):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
-    allow_origin_regex=r"https://.*\.pdfbuddy\.pages\.dev",
+    allow_origin_regex=r"https://([a-z0-9-]+\.)?pdfbuddy\.pages\.dev",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,4 +75,5 @@ async def health_check():
 
 # Include API routes
 from app.api.v1.router import api_v1_router
+
 app.include_router(api_v1_router, prefix="/api/v1")
