@@ -26,4 +26,4 @@ sudo systemctl --no-pager status pdfbuddy-api pdfbuddy-celery pdfbuddy-celery-da
 
 echo ""
 echo "Deploy complete. Health check:"
-curl -s http://localhost:8000/health | python3 -m json.tool 2>/dev/null || echo "API not responding yet (may need a few seconds)"
+curl -s http://localhost:8001/health | python3 -m json.tool 2>/dev/null || echo "API not responding yet (may need a few seconds)"
